@@ -1,7 +1,6 @@
 # 독수리봇 마크2(Eaglebot MK2)
 
 취미로 만든, 누구나 비상업적인 용도로 자유롭게 사용할 수 있는 디스코드 봇입니다.
-This is a discord bot that anyone can freely use for non-commercial purposes, made as a hobby.
 
 ---
 

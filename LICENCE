@@ -14,4 +14,13 @@ Notices:
 - You must not imply that the original author endorses your work or use.
 - You may fork this repository to build your version, but manual copying without attribution or link is discouraged.
 
+---
+
+🔧 Additional Usage Guidelines (Not legally binding but strongly requested):
+
+- If you base your **entire project** on this repository or create a heavily derived version,  
+  → **please fork this repository** or clearly link back to it.
+- If you **only use a part** of this code (e.g., a few functions, snippets, ideas),  
+  → **just include proper credit** (author name and link) in your work.
+
 Full license text: https://creativecommons.org/licenses/by-nc/4.0/

@@ -6,8 +6,7 @@ import json
 import os
 import shutil
 import typing
-import firebase_admin
-from firebase_admin import credentials, db
+from pymongo import MongoClient
 from library.BaseEnum import BaseEnum
 from typing import Any, Dict, Union, cast, Optional, List
 
@@ -152,127 +151,93 @@ class SaveDataTypeEnum(BaseEnum):
 #             targetPath:str = self._getFilePath(userID=parts[0])
 #         return os.path.exists(targetPath)
 
+mongo_uri = os.getenv("MONGO_URI")
 
-def initialize_firebase():
-    if not firebase_admin._apps:
-        raw_json = os.getenv("FIREBASE_CREDENTIALS_JSON")
-        if not raw_json:
-            raise RuntimeError("FIREBASE_CREDENTIALS_JSON 환경변수가 비어 있음!")
-
-        cred_dict = json.loads(raw_json)
-        cred = credentials.Certificate(cred_dict)
-
-        db_url = os.getenv("FIREBASE_DATABASE_URL")
-        if not db_url:
-            raise RuntimeError("FIREBASE_DATABASE_URL 환경변수가 비어 있음!")
-
-        firebase_admin.initialize_app(cred, {
-            'databaseURL': db_url
-        })
-
-initialize_firebase()
+if not mongo_uri:
+    raise RuntimeError("MONGO_URI 환경변수가 설정되어 있지 않음")
 
 class SaveData:
-    def __init__(self, dataType:Union[str, SaveDataTypeEnum]):
+    dataType: SaveDataTypeEnum
+
+    def __init__(self, dataType: Union[str, SaveDataTypeEnum]):
         if isinstance(dataType, str):
-            _dataType = cast(SaveDataTypeEnum, SaveDataTypeEnum[dataType.upper()])
+            _dataType: SaveDataTypeEnum = cast(SaveDataTypeEnum, SaveDataTypeEnum.from_any(dataType))
         else:
-            _dataType = dataType
+            _dataType: SaveDataTypeEnum = dataType
         self.dataType = _dataType
+        
+        self.client = MongoClient(mongo_uri)
+        self.db = self.client["eaglebot"]
+        self.collection = self.db["savedata"]
 
-    def _get_db_ref(self, serverID:Optional[str] = None, userID:Optional[str] = None):
-        base_ref = db.reference(self.dataType.value)
+    def _make_query(self, serverID: Optional[str], userID: Optional[str]) -> Dict[str, str]:
+        query = {"dataType": self.dataType.value}
         if self.dataType.isServerScoped:
-            if not serverID:
-                raise ValueError(f"[SaveData] '{self.dataType.name}' 타입은 serverID가 필요함!")
-            if not userID:
-                raise ValueError(f"[SaveData] '{self.dataType.name}' 타입은 userID가 필요함!")
-            return base_ref.child(serverID).child(userID)
+            if not serverID or not userID:
+                raise ValueError(f"[SaveData] '{self.dataType.name}' 타입은 serverID와 userID가 필요함")
+            query.update({"serverID": serverID, "userID": userID})
         else:
-            if userID:
-                return base_ref.child(userID)
-            elif serverID:
-                return base_ref.child(serverID)
+            if not userID:
+                if not serverID:
+                    raise ValueError("[SaveData] 아무 것도 주어지지 않음!")
+                query.update({"userID": serverID})
             else:
-                return base_ref
+                query.update({"userID": userID})
+        return query
 
-    def get(self, *, serverID:Optional[str] = None, userID:Optional[str] = None, data:Optional[str] = None, default:Any = None) -> Any:
-        ref = self._get_db_ref(serverID, userID)
-        snapshot = ref.get()
-        if snapshot is None:
+    def get(self, *, serverID: Optional[str] = None, userID: Optional[str] = None, data: Optional[str] = None, default: Any = None) -> Any | Dict[str, Any]:
+        query = self._make_query(serverID, userID)
+        doc = self.collection.find_one(query)
+        if not doc:
             return default if data else {}
-        if data:
-            return snapshot.get(data, default) if isinstance(snapshot, dict) else default
-        return snapshot
+        return doc["data"].get(data, default) if data else doc["data"]
 
-    def set(self, data:dict, serverID:Optional[str] = None, userID:Optional[str] = None) -> None:
-        ref = self._get_db_ref(serverID, userID)
-        ref.set(data)
+    def set(self, data: dict, serverID: Optional[str] = None, userID: Optional[str] = None) -> None:
+        query = self._make_query(serverID, userID)
+        self.collection.update_one(query, {"$set": {"data": data}}, upsert=True)
 
-    def update(self, updates:dict, serverID:Optional[str] = None, userID:Optional[str] = None) -> None:
-        ref = self._get_db_ref(serverID, userID)
-        ref.update(updates)
+    def update(self, updates: dict, serverID: Optional[str] = None, userID: Optional[str] = None) -> None:
+        query = self._make_query(serverID, userID)
+        self.collection.update_one(query, {"$set": {f"data.{k}": v for k, v in updates.items()}}, upsert=True)
 
-    def remove(self, *, serverID:Optional[str] = None, userID:Optional[str] = None, deleteServer:bool = False) -> None:
-        base_ref = db.reference(self.dataType.value)
+    def remove(self, *, serverID: Optional[str] = None, userID: Optional[str] = None, deleteServer: bool = False) -> None:
         if self.dataType.isServerScoped:
             if deleteServer and serverID:
-                base_ref.child(serverID).delete()
-                print(f'[SaveData] 서버 {serverID} 전체 데이터 삭제됨')
+                self.collection.delete_many({"dataType": self.dataType.value, "serverID": serverID})
             else:
                 if not serverID or not userID:
-                    raise ValueError('[SaveData] 서버 범위 삭제 시 serverID, userID 둘 다 필요함')
-                base_ref.child(serverID).child(userID).delete()
-                print(f'[SaveData] 서버 {serverID}의 유저 {userID} 데이터 삭제됨')
+                    raise ValueError("[SaveData] 서버 범위 삭제 시 serverID, userID 둘 다 필요함")
+                self.collection.delete_one({"dataType": self.dataType.value, "serverID": serverID, "userID": userID})
         else:
             if deleteServer:
                 raise ValueError("[SaveData] 글로벌 스코프 데이터는 deleteServer 불가능")
             if not userID:
-                raise ValueError('[SaveData] 글로벌 유저 데이터 삭제 시 userID 필요함')
-            base_ref.child(userID).delete()
-            print(f'[SaveData] 글로벌 유저 {userID} 데이터 삭제됨')
+                raise ValueError("[SaveData] 글로벌 유저 데이터 삭제 시 userID 필요함")
+            self.collection.delete_one({"dataType": self.dataType.value, "userID": userID})
 
-    def getUsers(self, serverID:str) -> Dict[str, Dict[str, Any]]:
+    def getUsers(self, serverID: str) -> Dict[str, Dict[str, Any]]:
         if not self.dataType.isServerScoped:
-            raise ValueError(f'[SaveData] {self.dataType.name}는 서버 단위 데이터가 아님')
-        base_ref = db.reference(self.dataType.value)
-        server_ref = base_ref.child(serverID)
-        snapshot = server_ref.get()
-        if not snapshot:
-            return {}
-        return snapshot
+            raise ValueError(f"[SaveData] {self.dataType.name}는 서버 단위 데이터가 아님")
+        cursor = self.collection.find({"dataType": self.dataType.value, "serverID": serverID})
+        return {doc["userID"]: doc["data"] for doc in cursor}
 
     def getServerLength(self) -> int:
         if not self.dataType.isServerScoped:
-            raise ValueError(f'[SaveData] {self.dataType.name}는 서버 단위 데이터가 아님')
-        base_ref = db.reference(self.dataType.value)
-        snapshot = base_ref.get()
-        if not snapshot:
-            return 0
-        return len(snapshot.keys())
+            raise ValueError(f"[SaveData] {self.dataType.name}는 서버 단위 데이터가 아님")
+        return len(self.collection.distinct("serverID", {"dataType": self.dataType.value}))
 
-    def getUserLength(self, serverID:str) -> int:
+    def getUserLength(self, serverID: str) -> int:
         if not self.dataType.isServerScoped:
-            raise ValueError(f'[SaveData] {self.dataType.name}는 서버 단위 데이터가 아님')
-        base_ref = db.reference(self.dataType.value)
-        server_ref = base_ref.child(serverID)
-        snapshot = server_ref.get()
-        if not snapshot:
-            return 0
-        return len(snapshot.keys())
+            raise ValueError(f"[SaveData] {self.dataType.name}는 서버 단위 데이터가 아님")
+        return self.collection.count_documents({"dataType": self.dataType.value, "serverID": serverID})
 
-    def __contains__(self, key:str) -> bool:
-        parts = key.split('/')
-        if self.dataType.isServerScoped:
-            if len(parts) != 2:
-                return False
-            ref = self._get_db_ref(parts[0], parts[1])
-        else:
-            if len(parts) != 1:
-                return False
-            ref = self._get_db_ref(userID=parts[0])
-        snapshot = ref.get()
-        return snapshot is not None
+    def __contains__(self, key: str) -> bool:
+        parts: List[str] = key.split('/')
+        try:
+            self._make_query(*parts)
+            return True
+        except Exception:
+            return False
         
 # server
 dataServer:SaveData = SaveData(SaveDataTypeEnum.SERVER_NORMAL)

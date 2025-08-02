@@ -7,7 +7,6 @@ import bisect
 from datetime import datetime
 import time
 import asyncio
-import sympy
 import copy
 
 # discord sec
@@ -66,4 +65,5 @@ from library.BaseEnum import BaseEnum
 T = typing.TypeVar('T')
 
 def forEach(objs:List[Any], func:Callable[[Any], None]) -> None:
+
     NormalUtil.forEach(objs, func)

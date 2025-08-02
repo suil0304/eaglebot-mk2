@@ -2,3 +2,4 @@ discord.py
 python-dotenv
 numpy
 requests
+firebase-admin

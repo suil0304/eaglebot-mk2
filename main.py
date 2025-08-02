@@ -8,8 +8,11 @@ from library.cogs.NormalCog import NormalCog
 import tracemalloc
 # 기타
 import os
+from dotenv import load_dotenv
 tracemalloc.start()
 os.system('cls')
+
+load_dotenv()
 
 intents:discord.Intents = discord.Intents.all()
 bot:Bot = Bot(command_prefix='!', intents=intents)
@@ -28,7 +31,8 @@ async def loofTerminalClear():
         await asyncio.sleep(600)
 
 # 아주 기밀
-TOKEN:str = "Put your discord bot token"
+# TOKEN:str = "Put your discord bot token"
+TOKEN:str = os.getenv("DISCORD_TOKEN")
     
 @bot.event
 async def on_ready():
@@ -171,5 +175,6 @@ async def whatareyoudoing(ctx:Context):
 async def on_command_error(ctx:Context, error:Exception):
     if isinstance(error, commands.CommandNotFound):
         pass
+
 
 bot.run(TOKEN)

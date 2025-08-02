@@ -4,6 +4,14 @@
 
 ---
 
+## 사용 프로그래밍 언어(Programming Language Used)
+- 파이썬(최신 버전)
+  Python(Latest Version)
+
+## 필요 라이브러리(Required Library)
+- discord.py(최신 버전)
+  discord.py(Latest Version)
+
 ## 라이선스(License)
 
 [![License: CC BY-NC 4.0](https://licensebuttons.net/l/by-nc/4.0/88x31.png)](https://creativecommons.org/licenses/by-nc/4.0/)
@@ -13,7 +21,7 @@ This project is licensed under the [Creative Commons Attribution-NonCommercial 4
 
 ---
 
-### 사용 조건 (Usage Terms)
+### 사용 조건(Usage Terms)
 
 - **비상업적인 목적**에 한해 사용, 공유, 수정이 가능합니다.  
   You may use, share, and modify this code **for non-commercial purposes only**.

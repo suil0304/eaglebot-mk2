@@ -73,8 +73,8 @@ class SaveDataUtil():
     @classmethod
     def initServer(cls, data:SaveData, serverID:str, initType:Optional[DefaultServerEnum] = None) -> None:
         if data.dataType.isServerScoped and initType == None: 
-            path:str = os.path.join(data.FILE_PATH, serverID)
-            os.makedirs(path, exist_ok=True)
+#            path:str = os.path.join(data.FILE_PATH, serverID)
+#            os.makedirs(path, exist_ok=True)
             return
         if cls.isServerInData(data, serverID) and initType != None :
             cls.deepUpdateData(data, initType.value, serverID)
@@ -108,4 +108,5 @@ class SaveDataUtil():
             currentData = {}
 
         cls.deepMergeDict(currentData, updates)
+
         data.set(currentData, serverID, userID)
